@@ -78,7 +78,9 @@ public class UCCUma : MonoBehaviour {
         }
 
         foreach(MonoBehaviour behaviour in runtimeEnabledBehaviours) {
-            behaviour.enabled = ready;
+            if (null != behaviour) {
+                behaviour.enabled = ready;
+            }
         }
     }
 

@@ -1,0 +1,114 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 14c6e9653df2c4eb0a3d3383d0284c7d, type: 3}
+  m_Name: AnimationStateCollection
+  m_EditorClassIdentifier: 
+  m_ItemIds: {fileID: 114253338373829798}
+  m_ItemStateIndexes: {fileID: 114440267291040352}
+  m_AbilityIndexes: {fileID: 114571745008399236}
+--- !u!114 &114253338373829798
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57e03b5c749654a25a934c834b2abfb0, type: 3}
+  m_Name: Item Ids
+  m_EditorClassIdentifier: 
+  m_AnimationStates:
+  - ID: 1
+    name: Assault Rifle
+  - ID: 2
+    name: Pistol
+  - ID: 3
+    name: Shotgun
+  - ID: 4
+    name: Bow
+  - ID: 5
+    name: Sniper Rifle
+  - ID: 6
+    name: Rocket Launcher
+  - ID: 21
+    name: Body
+  - ID: 22
+    name: Sword
+  - ID: 23
+    name: Knife
+  - ID: 24
+    name: Katana
+  - ID: 25
+    name: Shield
+  - ID: 41
+    name: Frag Grenade
+--- !u!114 &114440267291040352
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57e03b5c749654a25a934c834b2abfb0, type: 3}
+  m_Name: Item State Indexes
+  m_EditorClassIdentifier: 
+  m_AnimationStates:
+  - ID: 1
+    name: Aim
+  - ID: 2
+    name: Use
+  - ID: 3
+    name: Reload
+  - ID: 4
+    name: Equip
+  - ID: 5
+    name: Unequip
+  - ID: 6
+    name: Drop
+--- !u!114 &114571745008399236
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57e03b5c749654a25a934c834b2abfb0, type: 3}
+  m_Name: Ability Indexes
+  m_EditorClassIdentifier: 
+  m_AnimationStates:
+  - ID: 1
+    name: Jump
+  - ID: 2
+    name: Fall
+  - ID: 3
+    name: Height Change
+  - ID: 4
+    name: Die
+  - ID: 5
+    name: Revive
+  - ID: 6
+    name: Start Movement
+  - ID: 7
+    name: Stop Movement
+  - ID: 8
+    name: Quick Turn
+  - ID: 9
+    name: Interact
+  - ID: 10
+    name: Damage Visualization
+  - ID: 11
+    name: Pickup Item
+  - ID: 12
+    name: Ride
+  - ID: 10000
+    name: Generic
