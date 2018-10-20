@@ -32,6 +32,16 @@ namespace UCCExtensions {
             }
         }
 
+        private static string[] boolConditionNames = {
+            "true",
+            "false"
+        };
+
+        private static AnimatorConditionMode[] boolConditions = {
+            AnimatorConditionMode.If,
+            AnimatorConditionMode.IfNot
+        };
+
         private static string[] conditionModeNames = {
             "Greater",
             "Less",
@@ -123,26 +133,6 @@ namespace UCCExtensions {
             }
         }
 
-        private bool DrawStateSet(AnimationStateSet set, ref AnimatorCondition condition) {
-            int currentId = (int)condition.threshold;
-            string[] options = new string[stateCollection.ItemIds.Count + 1];
-            options[0] = "Undefined Item: " + currentId;
-            int itemIndex = 0;
-            for (int i = 1; i < set.AnimationStates.Length; i++) {
-                options[i] = set.AnimationStates[i].name;
-                if ((int)currentId == set.AnimationStates[i].ID) {
-                    options[0] = set.AnimationStates[i].name + " (current)";
-                    itemIndex = i;
-                }
-            }
-            int selectedIndex = EditorGUILayout.Popup(itemIndex, options);
-            if(itemIndex != selectedIndex && selectedIndex > 0) {
-                condition.threshold = set.AnimationStates[selectedIndex].ID;
-                return true;
-            }
-            return false;
-        }
-
         private bool DrawAnimatorCondition(ref AnimatorCondition condition, out bool remove) {
             bool modified = false;
             remove = false;
@@ -173,10 +163,10 @@ namespace UCCExtensions {
                         modified = true;
                     }
                     if (parameter.type == AnimatorControllerParameterType.Bool) {
-                        bool toggled = condition.threshold > 0;
-                        bool toggleChanged = EditorGUILayout.Toggle(toggled);
-                        if (toggleChanged != toggled) {
-                            condition.threshold = toggleChanged ? 1 : 0;
+                        int selectedCondition = Math.Max(0, System.Array.IndexOf(boolConditions, condition.mode));
+                        int conditionIdx = EditorGUILayout.Popup(selectedCondition, boolConditionNames);
+                        if (conditionIdx != selectedCondition) {
+                            condition.mode = boolConditions[conditionIdx];
                             modified = true;
                         }
                     } else if (parameter.type != AnimatorControllerParameterType.Trigger) {
@@ -186,17 +176,26 @@ namespace UCCExtensions {
                             condition.mode = conditionModes[conditionIdx];
                             modified = true;
                         }
+
+                        AnimationStateSet set = null;
                         if (parameter.name.EndsWith("ItemID")) {
-                            modified |= DrawStateSet(stateCollection.ItemIds, ref condition);
+                            set = stateCollection.ItemIds;
                         } else if (parameter.name.EndsWith("StateIndex")) {
-                            modified |= DrawStateSet(stateCollection.ItemStateIndexes, ref condition);
+                            set = stateCollection.ItemStateIndexes;
                         } else if (parameter.name.EndsWith("AbilityIndex")) {
-                            modified |= DrawStateSet(stateCollection.AbilityIndexes, ref condition);
+                            set = stateCollection.AbilityIndexes;
                         } else {
                             string result = EditorGUILayout.TextField("" + condition.threshold);
                             float resultValue;
                             if (float.TryParse(result, out resultValue) && resultValue != condition.threshold) {
                                 condition.threshold = resultValue;
+                                modified = true;
+                            }
+                        }
+                        if(null != set) {
+                            int id = stateCollection.ItemIds.DrawStateSet((int) condition.threshold);
+                            if(id != condition.threshold) {
+                                condition.threshold = id;
                                 modified = true;
                             }
                         }

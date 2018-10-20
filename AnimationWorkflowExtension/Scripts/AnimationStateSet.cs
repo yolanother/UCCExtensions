@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 namespace Opsive.UltimateCharacterController.Inventory {
@@ -35,6 +36,24 @@ namespace Opsive.UltimateCharacterController.Inventory {
             get {
                 return AnimationStates.Length;
             }
+        }
+
+        public int DrawStateSet(int currentId) {
+            string[] options = new string[Count + 1];
+            options[0] = "Undefined Item: " + currentId;
+            int itemIndex = 0;
+            for (int i = 1; i < AnimationStates.Length; i++) {
+                options[i] = AnimationStates[i].name;
+                if ((int)currentId == AnimationStates[i].ID) {
+                    options[0] = AnimationStates[i].name + " (current)";
+                    itemIndex = i;
+                }
+            }
+            int selectedIndex = EditorGUILayout.Popup(itemIndex, options);
+            if (itemIndex != selectedIndex && selectedIndex > 0) {
+                currentId = AnimationStates[selectedIndex].ID;
+            }
+            return currentId;
         }
     }
 }
