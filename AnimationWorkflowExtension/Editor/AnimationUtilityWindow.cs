@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using Opsive.UltimateCharacterController.Editor.Inspectors.Utility;
 using Opsive.UltimateCharacterController.Inventory;
 using UnityEditor;
@@ -62,7 +63,8 @@ namespace UCCExtensions {
         public AnimatorController AnimatorController {
             get {
                 return m_AnimatorController;
-            } set {
+            }
+            set {
                 m_AnimatorController = value;
                 UpdateParameterMappings(m_AnimatorController);
             }
@@ -82,7 +84,7 @@ namespace UCCExtensions {
         private void OnEnable() {
             Selection.selectionChanged += SelectionChanged;
             SelectionChanged();
-            if(null == stateCollection) {
+            if (null == stateCollection) {
                 stateCollection = UCCEManagerUtility.FindAnimStateColection(this);
             }
         }
@@ -106,12 +108,12 @@ namespace UCCExtensions {
         void SelectionChanged() {
             Debug.Log("Selection changed to " + Selection.activeObject + "::" + Selection.activeObject.GetType());
 
-            if(Selection.activeObject is GameObject) {
+            if (Selection.activeObject is GameObject) {
                 AnimatorController controller = GetAnimatorController(Selection.activeGameObject);
-                if(null != controller) {
+                if (null != controller) {
                     AnimatorController = controller;
                 }
-            } else if(Selection.activeObject is AnimatorStateTransition) {
+            } else if (Selection.activeObject is AnimatorStateTransition) {
                 currentSelection = Selection.activeObject;
             } else if (Selection.activeObject is AnimatorStateMachine) {
                 currentSelection = Selection.activeObject;
@@ -142,21 +144,23 @@ namespace UCCExtensions {
                     nameToParameter[parameterNames[i]] = parameters[i];
                     nameToParameterIndex[parameterNames[i]] = i;
                 }
+                Index();
             }
         }
 
         private bool DrawAnimatorCondition(ref AnimatorCondition condition, out bool remove) {
             bool modified = false;
             remove = false;
-            EditorGUILayout.BeginHorizontal(); {
+            EditorGUILayout.BeginHorizontal();
+            {
                 if (!nameToParameter.ContainsKey(condition.parameter)) {
                     string name = EditorGUILayout.TextField(condition.parameter);
                     if (name != condition.parameter) {
                         condition.parameter = name;
                         modified = true;
                     }
-                    AnimatorConditionMode mode = (AnimatorConditionMode) EditorGUILayout.EnumPopup(condition.mode);
-                    if(mode != condition.mode) {
+                    AnimatorConditionMode mode = (AnimatorConditionMode)EditorGUILayout.EnumPopup(condition.mode);
+                    if (mode != condition.mode) {
                         condition.mode = mode;
                         modified = true;
                     }
@@ -170,7 +174,7 @@ namespace UCCExtensions {
                     int parameterIndex = nameToParameterIndex[condition.parameter];
                     int index = EditorGUILayout.Popup(parameterIndex, parameterNames);
                     AnimatorControllerParameter parameter = parameters[index];
-                    if(index != parameterIndex) {
+                    if (index != parameterIndex) {
                         condition.parameter = parameter.name;
                         modified = true;
                     }
@@ -184,7 +188,7 @@ namespace UCCExtensions {
                     } else if (parameter.type != AnimatorControllerParameterType.Trigger) {
                         int selectedCondition = System.Array.IndexOf(conditionModes, condition.mode);
                         int conditionIdx = EditorGUILayout.Popup(selectedCondition, conditionModeNames);
-                        if(conditionIdx != selectedCondition) {
+                        if (conditionIdx != selectedCondition) {
                             condition.mode = conditionModes[conditionIdx];
                             modified = true;
                         }
@@ -204,9 +208,9 @@ namespace UCCExtensions {
                                 modified = true;
                             }
                         }
-                        if(null != set) {
-                            int id = stateCollection.ItemIds.DrawStateSet((int) condition.threshold);
-                            if(id != condition.threshold) {
+                        if (null != set) {
+                            int id = stateCollection.ItemIds.DrawStateSet((int)condition.threshold);
+                            if (id != condition.threshold) {
                                 condition.threshold = id;
                                 modified = true;
                             }
@@ -214,35 +218,95 @@ namespace UCCExtensions {
                     }
                 }
 
-                if(GUILayout.Button(InspectorStyles.DeleteIcon, InspectorStyles.NoPaddingButtonStyle, GUILayout.Width(16), GUILayout.Height(16))) {
+                if (GUILayout.Button(InspectorStyles.DeleteIcon, InspectorStyles.NoPaddingButtonStyle, GUILayout.Width(16), GUILayout.Height(16))) {
                     remove = true;
                     modified = true;
                 }
-            } EditorGUILayout.EndHorizontal();
+            }
+            EditorGUILayout.EndHorizontal();
             return modified;
         }
 
-        private void DrawAnimatorStateMachine(AnimatorStateMachine stateMachine) {
-            GUILayout.Label(stateMachine.name);
-            foreach (AnimatorTransition transition in stateMachine.GetStateMachineTransitions(stateMachine)) {
+        private void DrawState(State state, bool showHeader = true, string headerLabel = null) {
+            if (showHeader) GUILayout.Label(headerLabel ?? state.Name);
+
+            foreach (AnimatorTransitionBase transition in state.AnyStateTransitions) {
+                GUILayout.BeginVertical(EditorStyles.helpBox);
+                DrawAnimatorTransition(transition, "Any State");
+                GUILayout.EndVertical();
+                GUILayout.Space(8);
+            }
+            foreach (AnimatorTransitionBase transition in state.EntryTransitions) {
+                GUILayout.BeginVertical(EditorStyles.helpBox);
+                DrawAnimatorTransition(transition, "Entry");
+                GUILayout.EndVertical();
+                GUILayout.Space(8);
+            }
+            foreach (AnimatorTransitionBase transition in state.Transitions) {
                 GUILayout.BeginVertical(EditorStyles.helpBox);
                 DrawAnimatorTransition(transition);
                 GUILayout.EndVertical();
                 GUILayout.Space(8);
             }
-        }
-
-        private void DrawAnimatorState(AnimatorState animatorState) {
-            GUILayout.Label(animatorState.name);
-            foreach(AnimatorStateTransition transition in animatorState.transitions) {
-                GUILayout.BeginVertical(EditorStyles.helpBox);
-                DrawAnimatorStateTransition(transition);
-                GUILayout.EndVertical();
-                GUILayout.Space(8);
+            foreach (ChildAnimatorState childState in state.ChildStates) {
+                DrawAnimatorState(childState.state);
+            }
+            foreach (ChildAnimatorStateMachine childState in state.ChildStateMachines) {
+                DrawAnimatorStateMachine(childState.stateMachine);
             }
         }
 
-        private void DrawAnimatorTransition(AnimatorTransition transition) {
+        private void DrawAnimatorStateMachine(AnimatorStateMachine stateMachine, bool showHeader = true, string headerLabel = null) {
+            if (m_States.ContainsKey(stateMachine)) {
+                DrawState(m_States[stateMachine], showHeader, headerLabel);
+            } else {
+                if (showHeader) GUILayout.Label(headerLabel ?? stateMachine.name);
+
+                foreach (AnimatorStateTransition transition in stateMachine.anyStateTransitions) {
+                    GUILayout.BeginVertical(EditorStyles.helpBox);
+                    DrawAnimatorTransition(transition, "Any State");
+                    GUILayout.EndVertical();
+                    GUILayout.Space(8);
+                }
+                foreach (AnimatorTransition transition in stateMachine.entryTransitions) {
+                    GUILayout.BeginVertical(EditorStyles.helpBox);
+                    DrawAnimatorTransition(transition, "Entry");
+                    GUILayout.EndVertical();
+                    GUILayout.Space(8);
+                }
+                foreach (AnimatorTransition transition in stateMachine.GetStateMachineTransitions(stateMachine)) {
+                    GUILayout.BeginVertical(EditorStyles.helpBox);
+                    DrawAnimatorTransition(transition);
+                    GUILayout.EndVertical();
+                    GUILayout.Space(8);
+                }
+                foreach (ChildAnimatorState state in stateMachine.states) {
+                    DrawAnimatorState(state.state);
+                }
+            }
+        }
+
+        private void DrawAnimatorState(AnimatorState animatorState, bool showHeader = true, string headerLabel = null) {
+            if (m_States.ContainsKey(animatorState)) {
+                DrawState(m_States[animatorState], showHeader, headerLabel);
+            } else {
+                if (showHeader) GUILayout.Label(headerLabel ?? animatorState.name);
+                foreach (AnimatorStateTransition transition in animatorState.transitions) {
+                    GUILayout.BeginVertical(EditorStyles.helpBox);
+                    DrawAnimatorTransition(transition);
+                    GUILayout.EndVertical();
+                    GUILayout.Space(8);
+                }
+            }
+        }
+
+        private void OnFocus() {
+            if(null != m_AnimatorController) {
+                Index();
+            }
+        }
+
+        private void DrawAnimatorTransition(AnimatorTransitionBase transition, string source = null) {
 
             // This is ugly. Apparently you can't modify the collection directly.
             // The only way I found that worked was to remove conditions and readd
@@ -251,7 +315,7 @@ namespace UCCExtensions {
             List<AnimatorCondition> conditions = new List<AnimatorCondition>();
             bool modified = false;
 
-            string label = GetTransitionLabel(transition);
+            string label = GetTransitionLabel(transition, source: source);
             GUILayout.BeginHorizontal();
             {
                 foldouts[transition] = EditorGUILayout.Foldout(GetOrAdd(foldouts, transition, false), label);
@@ -291,57 +355,8 @@ namespace UCCExtensions {
             }
         }
 
-        private void DrawAnimatorStateTransition(AnimatorStateTransition transition) {
-
-            // This is ugly. Apparently you can't modify the collection directly.
-            // The only way I found that worked was to remove conditions and readd
-            // on modification. There must be a better way to do it.
-            // TODO: Do this the right way.
-            List<AnimatorCondition> conditions = new List<AnimatorCondition>();
-            bool modified = false;
-
-            string label = GetTransitionLabel(transition);
-            GUILayout.BeginHorizontal();
-            {
-                foldouts[transition] = EditorGUILayout.Foldout(GetOrAdd(foldouts, transition, false), label);
-                if (foldouts[transition]) {
-                    GUILayout.FlexibleSpace();
-                    if (GUILayout.Button("+", InspectorStyles.NoPaddingButtonStyle, GUILayout.Width(16), GUILayout.Height(16))) {
-                        AnimatorCondition condition = new AnimatorCondition();
-                        condition.parameter = parameterNames[0];
-                        conditions.Add(condition);
-                        modified = true;
-                    }
-                }
-            }
-            GUILayout.EndHorizontal();
-
-            if (foldouts[transition]) {
-                for (int i = 0; i < transition.conditions.Length; i++) {
-                    var condition = transition.conditions[i];
-                    bool remove;
-                    if (DrawAnimatorCondition(ref condition, out remove)) {
-                        if (!remove) conditions.Add(condition);
-                        modified = true;
-                    } else {
-                        conditions.Add(transition.conditions[i]);
-                    }
-                }
-
-                if (modified) {
-                    while (transition.conditions.Length > 0) {
-                        transition.RemoveCondition(transition.conditions[0]);
-                    }
-
-                    foreach (AnimatorCondition condition in conditions) {
-                        transition.AddCondition(condition.mode, condition.threshold, condition.parameter);
-                    }
-                }
-            }
-        }
-
-        private string GetTransitionLabel(AnimatorStateTransition transition, AnimatorState state = null) {
-            string label = (null == state ? "Transition" : state.name) + " -> ";
+        private string GetTransitionLabel(AnimatorTransitionBase transition, AnimatorState state = null, string source = null) {
+            string label = (source ?? (null == state ? "Transition" : state.name)) + " -> ";
             if (null != transition.destinationState) {
                 label += transition.destinationState.name;
             } else if (null != transition.destinationStateMachine) {
@@ -352,29 +367,16 @@ namespace UCCExtensions {
             return label;
         }
 
-        private string GetTransitionLabel(AnimatorTransition transition, AnimatorState state = null) {
-            string label = (null == state ? "Transition" : state.name) + " -> ";
-            if (null != transition.destinationState) {
-                label += transition.destinationState.name;
-            } else if (null != transition.destinationStateMachine) {
-                label += transition.destinationStateMachine.name;
-            } else if (transition.isExit) {
-                label += "Exit";
-            }
-            return label;
-        }
-
-
-        private static string[] UpdateLayerNames(IEnumerable<string> keys, bool sorted = true) {
+        private static string[] UpdateNames(IEnumerable<string> keys, bool sorted = true) {
             List<string> names = new List<string>();
-            foreach(string name in keys) {
+            foreach (string name in keys) {
                 names.Add(name);
             }
-            if(sorted) names.Sort();
+            if (sorted) names.Sort();
             return names.ToArray();
         }
 
-        private static U GetOrAdd<T, U>(Dictionary<T, U> dictionary, T name) {
+        private static U GetOrAdd<T, U>(IDictionary<T, U> dictionary, T name) {
             U group;
             if (!dictionary.TryGetValue(name, out group)) {
                 group = (U)typeof(U).GetConstructor(new Type[0]).Invoke(new object[0]);
@@ -392,176 +394,301 @@ namespace UCCExtensions {
             return group;
         }
 
-        private Dictionary<string, AnimatorGroup> m_AnimatorGroups = new Dictionary<string, AnimatorGroup>();
-        private string[] m_AnimatorGroupNames = new string[0];
-        private int selectedAnimatorGroup;
-        private int selectedActionGroup;
+        private class State {
+            private AnimatorState m_State;
+            private AnimatorStateMachine m_StateMachine;
+            private State m_ParentState;
+            private AnimatorControllerLayer m_Layer;
+            private ActionSet m_ActionSet;
+            private List<AnimatorTransitionBase> m_AnyTransitions = new List<AnimatorTransitionBase>();
+            private List<AnimatorTransitionBase> m_EntryTransitions = new List<AnimatorTransitionBase>();
 
-        private class StateSet {
-            public AnimatorState state;
-            public AnimatorStateMachine stateMachine;
-            public AnimatorControllerLayer layer;
-            public StateGroup group;
-            public string name;
 
-            public StateSet(AnimatorState state, AnimatorControllerLayer layer, StateGroup group) {
-                this.state = state;
-                this.layer = layer;
-                this.group = group;
+            public State() { }
+
+            public State(AnimatorState state, AnimatorControllerLayer layer) {
+                m_State = state;
+                m_Layer = layer;
             }
 
-            public StateSet(AnimatorStateMachine stateMachine, AnimatorControllerLayer layer, StateGroup group) {
-                this.stateMachine = stateMachine;
-                this.layer = layer;
-                this.group = group;
+            public State(AnimatorStateMachine stateMachine, AnimatorControllerLayer layer) {
+                m_StateMachine = stateMachine;
+                m_Layer = layer;
             }
 
-            public bool IsStateMachineSet {
+            public List<AnimatorTransitionBase> AnyStateTransitions {
                 get {
-                    return stateMachine != null;
+                    return m_AnyTransitions;
                 }
             }
 
-            public bool IsStateSet {
+            public List<AnimatorTransitionBase> EntryTransitions {
                 get {
-                    return state != null;
+                    return m_EntryTransitions;
+                }
+            }
+
+            public List<AnimatorTransitionBase> Transitions {
+                get {
+                    List<AnimatorTransitionBase> transitions = new List<AnimatorTransitionBase>();
+                    if (null != m_State) {
+                        transitions.AddRange(m_State.transitions);
+                    }
+                    if(null != m_StateMachine) {
+                        transitions.AddRange(m_StateMachine.GetStateMachineTransitions(m_StateMachine));
+                    }
+                    return transitions;
+                }
+            }
+
+            public State Parent {
+                get {
+                    return m_ParentState;
+                } set {
+                    m_ParentState = value;
+                    m_AnyTransitions.Clear();
+                    m_EntryTransitions.Clear();
+                    State parent = m_ParentState;
+                    while (null != parent) {
+                        foreach (AnimatorTransitionBase transition in parent.m_StateMachine.anyStateTransitions) {
+                            if (null != transition.destinationState && transition.destinationState == m_State) {
+                                m_AnyTransitions.Add(transition);
+                            }
+                            if (null != transition.destinationStateMachine && transition.destinationStateMachine == m_StateMachine) {
+                                m_AnyTransitions.Add(transition);
+                            }
+                        }
+                        foreach (AnimatorTransitionBase transition in parent.m_StateMachine.entryTransitions) {
+                            if (null != transition.destinationState && transition.destinationState == m_State) {
+                                m_EntryTransitions.Add(transition);
+                            }
+                            if (null != transition.destinationStateMachine && transition.destinationStateMachine == m_StateMachine) {
+                                m_EntryTransitions.Add(transition);
+                            }
+                        }
+                        parent = parent.Parent;
+                    }
+                }
+            }
+
+            public String Name {
+                get {
+                    if (null != m_State) return m_State.name;
+                    if (null != m_StateMachine) return m_StateMachine.name;
+                    return "";
+                }
+            }
+
+            public AnimatorControllerLayer Layer {
+                get { return m_Layer; }
+                set { m_Layer = value; }
+            }
+
+            public ActionSet ActionSet {
+                get { return m_ActionSet; }
+                set { m_ActionSet = value; }
+            }
+
+            public AnimatorState AnimatorState {
+                get {
+                    return m_State;
+                }
+            }
+
+            public AnimatorStateMachine StateMachine {
+                get {
+                    return m_StateMachine;
+                }
+            }
+
+            public ChildAnimatorState[] ChildStates {
+                get {
+                    return m_StateMachine != null ? m_StateMachine.states : new ChildAnimatorState[0];
+                }
+            }
+
+            public ChildAnimatorStateMachine[] ChildStateMachines {
+                get {
+                    return m_StateMachine != null ? m_StateMachine.stateMachines : new ChildAnimatorStateMachine[0];
                 }
             }
         }
 
-        private class StateGroup {
-            private Dictionary<string, AnimatorControllerLayer> layers = new Dictionary<string, AnimatorControllerLayer>();
-            private Dictionary<string, HashSet<StateSet>> states = new Dictionary<string, HashSet<StateSet>>();
-            public string name;
+        private class ActionSet {
+            private string m_Name;
+            private List<State> m_States = new List<State>();
+            private SortedDictionary<string, AnimatorControllerLayer> m_Layers = new SortedDictionary<string, AnimatorControllerLayer>();
+            private string[] m_StateNames = new string[0];
 
-            public void Add(AnimatorState state, AnimatorControllerLayer layer) {
-                layers[layer.name] = layer;
-                StateSet stateSet = new StateSet(state, layer, this);
-                GetOrAdd(states, layer.name).Add(stateSet);
-                GetOrAdd(states, state.name).Add(stateSet);
+            // This will map to something like
+            // Bow (AnimatorGroup) -> Draw (Action) -> Full Body Layer (State)
+            private SortedDictionary<string, State> m_LayerToStates = new SortedDictionary<string, State>();
+
+            public string Name {
+                get { return m_Name; }
+                set { m_Name = value; }
             }
 
-            public void Add(AnimatorStateMachine state, AnimatorControllerLayer layer) {
-                layers[layer.name] = layer;
-                StateSet stateSet = new StateSet(state, layer, this);
-                GetOrAdd(states, layer.name).Add(stateSet);
-                GetOrAdd(states, state.name).Add(stateSet);
+            public List<State> States {
+                get { return m_States; }
             }
 
-            public Dictionary<string, AnimatorControllerLayer> Layers {
+            public SortedDictionary<string, AnimatorControllerLayer> Layers {
                 get {
-                    return layers;
-                }
-            }
-
-            public Dictionary<string, HashSet<StateSet>> States {
-                get {
-                    return states;
+                    return m_Layers;
                 }
             }
         }
 
         private class AnimatorGroup {
-            private Dictionary<string, AnimatorControllerLayer> m_Layers = new Dictionary<string, AnimatorControllerLayer>();
-            private Dictionary<string, AnimatorState> m_AnimatorStates = new Dictionary<string, AnimatorState>();
-            private Dictionary<string, StateGroup> m_StateGroups = new Dictionary<string, StateGroup>();
-            private string[] m_LayerNames = new string[0];
-            private string[] m_StateGroupNames = new string[0];
+            private string m_Name;
+            private SortedDictionary<string, AnimatorControllerLayer> m_Layers = new SortedDictionary<string, AnimatorControllerLayer>();
+            private SortedDictionary<string, ActionSet> m_Actions = new SortedDictionary<string, ActionSet>();
+            private string[] m_ActionNames = new string[0];
 
-            public void Add(AnimatorControllerLayer layer, AnimatorStateMachine stateMachine) {
-                m_Layers[layer.name] = layer;
-                m_LayerNames = UpdateLayerNames(m_Layers.Keys);
-
-                foreach (ChildAnimatorState state in stateMachine.states) {
-                    StateGroup group = GetOrAdd(m_StateGroups, state.state.name);
-                    group.name = state.state.name;
-                    group.Add(state.state, layer);
-                }
-
-                foreach (ChildAnimatorStateMachine state in stateMachine.stateMachines) {
-                    StateGroup group = GetOrAdd(m_StateGroups, state.stateMachine.name);
-                    group.name = state.stateMachine.name;
-                    group.Add(state.stateMachine, layer);
-                }
-
-                m_StateGroupNames = UpdateLayerNames(m_StateGroups.Keys);
+            public string Name {
+                get { return m_Name; }
+                set { m_Name = value; }
             }
 
-            public string[] StateGroupNames {
+            public SortedDictionary<string, AnimatorControllerLayer> Layers {
                 get {
-                    return m_StateGroupNames;
+                    return m_Layers;
                 }
             }
 
-            public Dictionary<string, StateGroup> StateGroups {
+            public SortedDictionary<string, ActionSet> Actions {
                 get {
-                    return m_StateGroups;
+                    return m_Actions;
                 }
             }
+
+            public void AddLayer(AnimatorControllerLayer layer) {
+                m_Layers.Add(layer.name, layer);
+            }
+
+            public string[] ActionNames {
+                get {
+                    if(m_ActionNames.Length != m_Layers.Count) {
+                        m_ActionNames = UpdateNames(m_Actions.Keys);
+                    }
+                    return m_ActionNames;
+                }
+
+            }
+        }
+
+        private Dictionary<object, State> m_States = new Dictionary<object, State>();
+        private SortedDictionary<string, AnimatorControllerLayer> m_Layers = new SortedDictionary<string, AnimatorControllerLayer>();
+        private SortedDictionary<string, AnimatorGroup> m_AnimatorGroups = new SortedDictionary<string, AnimatorGroup>();
+        private int selectedAnimatorGroup;
+        private int selectedAction;
+
+        private State AddState(AnimatorStateMachine stateMachine, State parent, AnimatorControllerLayer layer, ActionSet actionSet, bool addChildren = true) {
+            State state = new State(stateMachine, layer);
+            state.Layer = layer;
+            state.ActionSet = actionSet;
+            state.Parent = parent;
+            m_States[stateMachine] = state;
+            if (addChildren) {
+                foreach (ChildAnimatorState child in stateMachine.states) {
+                    AddState(child.state, state, layer, actionSet);
+                }
+                foreach (ChildAnimatorStateMachine child in stateMachine.stateMachines) {
+                    AddState(child.stateMachine, state, layer, actionSet);
+                }
+            }
+            return state;
+        }
+
+        private State AddState(AnimatorState animatorState, State parent, AnimatorControllerLayer layer, ActionSet actionSet) {
+            State state = new State(animatorState, layer);
+            state.Layer = layer;
+            state.ActionSet = actionSet;
+            state.Parent = parent;
+            m_States[animatorState] = state;
+            return state;
         }
 
         private void Index() {
             m_AnimatorGroups.Clear();
-            m_AnimatorGroupNames = new string[0];
-            if(null != m_AnimatorController) {
-                foreach(AnimatorControllerLayer layer in m_AnimatorController.layers) {
-                    foreach (ChildAnimatorStateMachine stateMachine in layer.stateMachine.stateMachines) {
-                        GetOrAdd(m_AnimatorGroups, stateMachine.stateMachine.name).Add(layer, stateMachine.stateMachine);
+            if (m_AnimatorController != null) {
+                foreach (AnimatorControllerLayer layer in m_AnimatorController.layers) {
+                    m_Layers[layer.name] = layer;
+                    State layerState = AddState(layer.stateMachine, null, layer, null, false);
+                    foreach (ChildAnimatorStateMachine stateMachine in layerState.ChildStateMachines) {
+                        State groupState = AddState(stateMachine.stateMachine, layerState, layer, null, false);
+                        AnimatorGroup group = GetOrAdd(m_AnimatorGroups, stateMachine.stateMachine.name);
+                        group.AddLayer(layer);
+                        foreach (ChildAnimatorStateMachine actionMachine in stateMachine.stateMachine.stateMachines) {
+                            ActionSet actionSet = GetOrAdd(group.Actions, actionMachine.stateMachine.name);
+                            actionSet.Name = actionMachine.stateMachine.name;
+                            actionSet.Layers[layer.name] = layer;
+                            State state = AddState(actionMachine.stateMachine, groupState, layer, actionSet);
+                            actionSet.States.Add(state);
+                        }
+                        foreach (ChildAnimatorState actionState in stateMachine.stateMachine.states) {
+                            ActionSet actionSet = GetOrAdd(group.Actions, actionState.state.name);
+                            actionSet.Name = actionState.state.name;
+                            actionSet.Layers[layer.name] = layer;
+                            State state = AddState(actionState.state, groupState, layer, actionSet);
+                            actionSet.States.Add(state);
+                            m_States[actionState.state] = state;
+                        }
                     }
                 }
-                m_AnimatorGroupNames = UpdateLayerNames(m_AnimatorGroups.Keys);
             }
         }
 
         private void DrawRootController() {
-            GUILayout.BeginHorizontal(); {
-                GUILayout.Label("Action Group", GUILayout.Width(100));
-                selectedAnimatorGroup = Math.Min(m_AnimatorGroupNames.Length - 1, selectedAnimatorGroup);
-                selectedAnimatorGroup = EditorGUILayout.Popup(selectedAnimatorGroup, m_AnimatorGroupNames);
-            } GUILayout.EndHorizontal();
+            AnimatorGroup animatorGroup;
+            ActionSet actionSet;
 
-            AnimatorGroup animGroup = m_AnimatorGroups[m_AnimatorGroupNames[selectedAnimatorGroup]];
+            GUILayout.BeginHorizontal(); {
+                GUILayout.Label("Group", GUILayout.Width(100));
+                string[] names = m_AnimatorGroups.Keys.ToArray();
+                selectedAnimatorGroup = Math.Min(names.Length - 1, selectedAnimatorGroup);
+                selectedAnimatorGroup = EditorGUILayout.Popup(selectedAnimatorGroup, names);
+                animatorGroup = m_AnimatorGroups[names[selectedAnimatorGroup]];
+            } GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal(); {
                 GUILayout.Label("Action", GUILayout.Width(100));
-                selectedActionGroup = Math.Min(animGroup.StateGroupNames.Length - 1, selectedActionGroup);
-                selectedActionGroup = EditorGUILayout.Popup(selectedActionGroup, animGroup.StateGroupNames);
-                
+                string[] names = animatorGroup.Actions.Keys.ToArray();
+                selectedAction = Math.Min(names.Length - 1, selectedAction);
+                selectedAction = EditorGUILayout.Popup(selectedAction, names);
+                actionSet = animatorGroup.Actions[names[selectedAction]];
             } GUILayout.EndHorizontal();
-            StateGroup group = animGroup.StateGroups[animGroup.StateGroupNames[selectedActionGroup]];
-           
-            GUILayout.Label(group.name);
-            GUILayout.BeginHorizontal(); {
-                GUILayout.Space(20);
-                GUILayout.BeginVertical(); {
-                    foreach (string layer in group.States.Keys) {
-                        GUILayout.Label(layer);
-                        foreach (StateSet state in group.States[layer]) {
-                            if (state.IsStateMachineSet) {
-                                DrawAnimatorStateMachine(state.stateMachine);
-                            } else if (state.IsStateSet) {
-                                DrawAnimatorState(state.state);
-                            }
-                        }
-                    }
-                } GUILayout.EndVertical();
-            } GUILayout.EndHorizontal();
+
+            foreach(State state in actionSet.States) {
+                GUILayout.Label(state.Layer.name);
+                if(state.StateMachine != null) {
+                    DrawAnimatorStateMachine(state.StateMachine, false);
+                } else if(state.AnimatorState != null) {
+                    DrawAnimatorState(state.AnimatorState, false);
+                }
+            }
         }
 
         private void OnGUI() {
             if (m_AnimatorController == null ) {
                 GUILayout.Label("Please select an animator controller.");
                 m_AnimatorController = (AnimatorController) EditorGUILayout.ObjectField(m_AnimatorController, typeof(AnimatorController));
+                if(null != m_AnimatorController) {
+                    Index();
+                }
             } else {
+                // TODO: This will probably need to move out and shouldn't be done
+                // every frame. Performing fine for now.
                 scroll = GUILayout.BeginScrollView(scroll); {
                     stateCollection = (AnimationStateCollection)EditorGUILayout.ObjectField(stateCollection, typeof(AnimationStateCollection));
                     if (currentSelection is AnimatorStateTransition) {
-                        DrawAnimatorStateTransition(currentSelection as AnimatorStateTransition);
+                        DrawAnimatorTransition(currentSelection as AnimatorStateTransition);
+                    } else if (currentSelection is AnimatorStateMachine) {
+                        DrawAnimatorStateMachine(currentSelection as AnimatorStateMachine);
                     } else if (currentSelection is AnimatorState) {
-                        Debug.Log("DrawAnimatorState");
                         DrawAnimatorState(currentSelection as AnimatorState);
-                    } else if(null != m_AnimatorController) {
-                        Index();
+                    } else {
                         DrawRootController();
                     }
                 } GUILayout.EndScrollView();
