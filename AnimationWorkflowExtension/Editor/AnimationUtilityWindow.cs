@@ -193,11 +193,12 @@ namespace UCCExtensions {
                         }
 
                         AnimationStateSet set = null;
-                        if (parameter.name.EndsWith("ItemID")) {
+                        if (parameter.name.ToLower().EndsWith("itemid")) {
                             set = stateCollection.ItemIds;
-                        } else if (parameter.name.EndsWith("StateIndex")) {
+                        } else if (parameter.name.ToLower().EndsWith("stateindex")) {
+                            Debug.Log("State index...");
                             set = stateCollection.ItemStateIndexes;
-                        } else if (parameter.name.EndsWith("AbilityIndex")) {
+                        } else if (parameter.name.ToLower().EndsWith("abilityindex")) {
                             set = stateCollection.AbilityIndexes;
                         } else {
                             string result = EditorGUILayout.TextField("" + condition.threshold);
@@ -208,7 +209,7 @@ namespace UCCExtensions {
                             }
                         }
                         if (null != set) {
-                            int id = stateCollection.ItemIds.DrawStateSet((int)condition.threshold);
+                            int id = set.DrawStateSet((int)condition.threshold);
                             if (id != condition.threshold) {
                                 condition.threshold = id;
                                 modified = true;
@@ -305,7 +306,7 @@ namespace UCCExtensions {
             }
         }
 
-        private void DrawAnimatorTransition(AnimatorTransitionBase transition, string source = null, CombinedAnimatorState sourceState = null) {
+        private void DrawAnimatorTransition(AnimatorTransitionBase transition, string source = null, CombinedAnimatorState sourceState = null, bool foldout = true) {
 
             // This is ugly. Apparently you can't modify the collection directly.
             // The only way I found that worked was to remove conditions and readd
@@ -317,8 +318,12 @@ namespace UCCExtensions {
             string label = GetTransitionLabel(transition, sourceState, source);
             GUILayout.BeginHorizontal();
             {
-                foldouts[transition] = EditorGUILayout.Foldout(CollectionUtil.GetOrAdd(foldouts, transition, false), label);
-                if (foldouts[transition]) {
+                if (foldout) {
+                    foldouts[transition] = EditorGUILayout.Foldout(CollectionUtil.GetOrAdd(foldouts, transition, false), label);
+                } else {
+                    GUILayout.Label(label);
+                }
+                if (!foldout || foldouts[transition]) {
                     GUILayout.FlexibleSpace();
                     if (GUILayout.Button("+", InspectorStyles.NoPaddingButtonStyle, GUILayout.Width(16), GUILayout.Height(16))) {
                         AnimatorCondition condition = new AnimatorCondition();
@@ -330,7 +335,7 @@ namespace UCCExtensions {
             }
             GUILayout.EndHorizontal();
 
-            if (foldouts[transition]) {
+            if (!foldout || foldouts[transition]) {
                 for (int i = 0; i < transition.conditions.Length; i++) {
                     var condition = transition.conditions[i];
                     bool remove;
@@ -356,7 +361,7 @@ namespace UCCExtensions {
 
         private string GetTransitionLabel(AnimatorTransitionBase transition, CombinedAnimatorState state = null, string source = null) {
             string label = (source ?? "Self") + " -> ";
-            if(state.HasTransition(transition)) {
+            if(null != state && state.HasTransition(transition)) {
                 label += "Self";
             } else if (null != transition.destinationState) {
                 label += transition.destinationState.name;
@@ -473,7 +478,7 @@ namespace UCCExtensions {
                 scroll = GUILayout.BeginScrollView(scroll); {
                     stateCollection = (AnimationStateCollection)EditorGUILayout.ObjectField(stateCollection, typeof(AnimationStateCollection));
                     if (currentSelection is AnimatorStateTransition) {
-                        DrawAnimatorTransition(currentSelection as AnimatorStateTransition);
+                        DrawAnimatorTransition(currentSelection as AnimatorStateTransition, foldout: false);
                     } else if (currentSelection is AnimatorStateMachine) {
                         DrawAnimatorStateMachine(currentSelection as AnimatorStateMachine);
                     } else if (currentSelection is AnimatorState) {
