@@ -193,12 +193,11 @@ namespace UCCExtensions {
                         }
 
                         AnimationStateSet set = null;
-                        if (parameter.name.ToLower().EndsWith("itemid")) {
+                        if (parameter.name.EndsWith("ItemID")) {
                             set = stateCollection.ItemIds;
-                        } else if (parameter.name.ToLower().EndsWith("stateindex")) {
-                            Debug.Log("State index...");
+                        } else if (parameter.name.EndsWith("StateIndex")) {
                             set = stateCollection.ItemStateIndexes;
-                        } else if (parameter.name.ToLower().EndsWith("abilityindex")) {
+                        } else if (parameter.name.EndsWith("AbilityIndex")) {
                             set = stateCollection.AbilityIndexes;
                         } else {
                             string result = EditorGUILayout.TextField("" + condition.threshold);
