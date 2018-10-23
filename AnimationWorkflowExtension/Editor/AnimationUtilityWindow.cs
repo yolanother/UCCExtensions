@@ -18,6 +18,7 @@ namespace UCCExtensions {
         private Dictionary<string, int> nameToParameterIndex = new Dictionary<string, int>();
 
         private Dictionary<UnityEngine.Object, bool> foldouts = new Dictionary<UnityEngine.Object, bool>();
+        private Dictionary<string, bool> m_Toggles = new Dictionary<string, bool>();
 
         private UnityEngine.Object currentSelection;
 
@@ -105,7 +106,7 @@ namespace UCCExtensions {
         }
 
         void SelectionChanged() {
-            Debug.Log("Selection changed to " + Selection.activeObject + "::" + Selection.activeObject.GetType());
+            //if(null != Selection.activeObject) Debug.Log("Selection changed to " + Selection.activeObject + "::" + Selection.activeObject.GetType());
 
             if (Selection.activeObject is GameObject) {
                 AnimatorController controller = GetAnimatorController(Selection.activeGameObject);
@@ -118,7 +119,7 @@ namespace UCCExtensions {
                 currentSelection = Selection.activeObject;
             } else if (Selection.activeObject is AnimatorState) {
                 currentSelection = Selection.activeObject;
-            } else if (Selection.activeObject.GetType().Name == "UnityEditor.Animations.AnimatorDefaultTransition") {
+            } else if (null != Selection.activeObject && Selection.activeObject.GetType().Name == "UnityEditor.Animations.AnimatorDefaultTransition") {
                 currentSelection = Selection.activeObject;
             }
 
@@ -377,6 +378,11 @@ namespace UCCExtensions {
         private SortedDictionary<string, AnimatorGroup> m_AnimatorGroups = new SortedDictionary<string, AnimatorGroup>();
         private int selectedAnimatorGroup;
         private int selectedAction;
+        private bool m_AddGroupHidden = true;
+        private string m_AddGroupName;
+        private bool m_AddActionHidden = true;
+        private string m_AddActionName;
+        private Motion m_Motion;
 
         private CombinedAnimatorState AddState(AnimatorStateMachine stateMachine, CombinedAnimatorState parent, AnimatorControllerLayer layer, ActionSet actionSet, bool addChildren = true) {
             CombinedAnimatorState state = new CombinedAnimatorState(stateMachine, layer);
@@ -413,6 +419,7 @@ namespace UCCExtensions {
                     foreach (ChildAnimatorStateMachine stateMachine in layerState.ChildStateMachines) {
                         CombinedAnimatorState groupState = AddState(stateMachine.stateMachine, layerState, layer, null, false);
                         AnimatorGroup group = CollectionUtil.GetOrAdd(m_AnimatorGroups, stateMachine.stateMachine.name);
+                        group.Name = stateMachine.stateMachine.name;
                         group.AddLayer(layer);
                         foreach (ChildAnimatorStateMachine actionMachine in stateMachine.stateMachine.stateMachines) {
                             ActionSet actionSet = CollectionUtil.GetOrAdd(group.Actions, actionMachine.stateMachine.name);
@@ -434,32 +441,155 @@ namespace UCCExtensions {
             }
         }
 
-        private void DrawRootController() {
+        private AnimatorGroup DrawGroupDropdown() {
             AnimatorGroup animatorGroup;
-            ActionSet actionSet;
-
-            GUILayout.BeginHorizontal(); {
+            GUILayout.BeginHorizontal();
+            {
                 GUILayout.Label("Group", GUILayout.Width(100));
                 string[] names = m_AnimatorGroups.Keys.ToArray();
                 selectedAnimatorGroup = Math.Min(names.Length - 1, selectedAnimatorGroup);
                 selectedAnimatorGroup = EditorGUILayout.Popup(selectedAnimatorGroup, names);
                 animatorGroup = m_AnimatorGroups[names[selectedAnimatorGroup]];
-            } GUILayout.EndHorizontal();
+                if (m_AddGroupHidden && GUILayout.Button("+", InspectorStyles.NoPaddingButtonStyle, GUILayout.Width(16), GUILayout.Height(16))) {
+                    m_AddGroupHidden = false;
+                } else if (!m_AddGroupHidden && GUILayout.Button("-", InspectorStyles.NoPaddingButtonStyle, GUILayout.Width(16), GUILayout.Height(16))) {
+                    m_AddGroupHidden = true;
+                }
+            }
+            GUILayout.EndHorizontal();
 
-            GUILayout.BeginHorizontal(); {
+            if (!m_AddGroupHidden) {
+                GUILayout.BeginHorizontal();
+                {
+
+                    GUILayout.Space(110);
+                    GUILayout.BeginVertical();
+                    {
+                        GUILayout.BeginHorizontal();
+                        {
+                            GUILayout.Label("Group Name:", GUILayout.Width(75));
+                            m_AddGroupName = GUILayout.TextField(m_AddGroupName);
+                            if (GUILayout.Button("Add", GUILayout.Width(60))) {
+
+                                foreach (AnimatorControllerLayer layer in m_AnimatorController.layers) {
+                                    string key = "add-group-toggle-" + layer.name;
+                                    bool toggle = CollectionUtil.GetOrAdd(m_Toggles, key, false);
+                                    if(toggle) {
+                                        AnimUtil.AddStateMachineToLayer(layer, m_AddGroupName);
+                                    }
+                                }
+                                Index();
+                                string[] keys = m_AnimatorGroups.Keys.ToArray();
+                                selectedAnimatorGroup = Array.IndexOf(keys, m_AddGroupName);
+                                animatorGroup = m_AnimatorGroups[m_AddGroupName];
+                                m_AddGroupHidden = true;
+                                m_AddGroupName = "";
+                                m_AddActionHidden = true;
+                            }
+                        }
+                        GUILayout.EndHorizontal();
+
+                        foreach(AnimatorControllerLayer layer in m_AnimatorController.layers) {
+                            string key = "add-group-toggle-" + layer.name;
+                            bool toggle = CollectionUtil.GetOrAdd(m_Toggles, key, false);
+                            m_Toggles[key] = GUILayout.Toggle(toggle, layer.name);
+                        }
+                    }
+                    GUILayout.EndVertical();
+                }
+                GUILayout.EndHorizontal();
+            }
+
+            return animatorGroup;
+        }
+
+        private ActionSet DrawActionSetDropdown(AnimatorGroup animatorGroup) {
+            ActionSet actionSet = null;
+
+            GUILayout.BeginHorizontal();
+            {
                 GUILayout.Label("Action", GUILayout.Width(100));
                 string[] names = animatorGroup.Actions.Keys.ToArray();
-                selectedAction = Math.Min(names.Length - 1, selectedAction);
-                selectedAction = EditorGUILayout.Popup(selectedAction, names);
-                actionSet = animatorGroup.Actions[names[selectedAction]];
-            } GUILayout.EndHorizontal();
+                selectedAction = Math.Max(0, selectedAction);
+                if (names.Length == 0 || !animatorGroup.Actions.ContainsKey(names[selectedAction])) {
+                    GUILayout.Label("No actions created.");
+                } else {
+                    selectedAction = EditorGUILayout.Popup(selectedAction, names);
+                    actionSet = animatorGroup.Actions[names[selectedAction]];
+                }
 
-            foreach(CombinedAnimatorState state in actionSet.States) {
-                GUILayout.Label(state.Layer.name);
-                if(state.StateMachine != null) {
-                    DrawAnimatorStateMachine(state.StateMachine, false);
-                } else if(state.AnimatorState != null) {
-                    DrawAnimatorState(state.AnimatorState, false);
+                if (m_AddActionHidden && GUILayout.Button("+", InspectorStyles.NoPaddingButtonStyle, GUILayout.Width(16), GUILayout.Height(16))) {
+                    m_AddActionHidden = false;
+                    foreach (AnimatorControllerLayer layer in animatorGroup.Layers.Values) {
+                        string key = "add-action-toggle-" + layer.name;
+                        m_Toggles[key] = true;
+                    }
+                } else if (!m_AddActionHidden && GUILayout.Button("-", InspectorStyles.NoPaddingButtonStyle, GUILayout.Width(16), GUILayout.Height(16))) {
+                    m_AddActionHidden = true;
+                }
+            }
+            GUILayout.EndHorizontal();
+
+            if (!m_AddActionHidden) {
+                GUILayout.BeginHorizontal();
+                {
+
+                    GUILayout.Space(110);
+                    GUILayout.BeginVertical();
+                    {
+                        GUILayout.BeginHorizontal();
+                        {
+                            GUILayout.Label("Action Name:", GUILayout.Width(75));
+                            m_AddActionName = GUILayout.TextField(m_AddActionName);
+                            if (GUILayout.Button("Add", GUILayout.Width(60))) {
+
+                                foreach (AnimatorControllerLayer layer in m_AnimatorController.layers) {
+                                    string key = "add-action-toggle-" + layer.name;
+                                    bool toggle = CollectionUtil.GetOrAdd(m_Toggles, key, false);
+                                    if (toggle) {
+                                        AnimatorStateMachine stateMachine = 
+                                            AnimUtil.AddStateMachineToLayer(layer, animatorGroup.Name);
+                                        AnimatorState state = AnimUtil.AddStateToStateMachine(stateMachine, m_AddActionName);
+                                        state.motion = m_Motion;
+                                    }
+                                }
+                                Index();
+                                string[] actions = animatorGroup.Actions.Keys.ToArray();
+                                selectedAction = Array.IndexOf(actions, m_AddActionName);
+                                m_AddActionHidden = true;
+                                m_AddGroupHidden = true;
+                                m_AddActionName = "";
+                            }
+                        }
+                        GUILayout.EndHorizontal();
+                        m_Motion = (Motion)EditorGUILayout.ObjectField("Motion", m_Motion, typeof(Motion));
+
+                        foreach (AnimatorControllerLayer layer in m_AnimatorController.layers) {
+                            string key = "add-action-toggle-" + layer.name;
+                            bool toggle = CollectionUtil.GetOrAdd(m_Toggles, key, false);
+                            m_Toggles[key] = GUILayout.Toggle(toggle, layer.name);
+                        }
+                    }
+                    GUILayout.EndVertical();
+                }
+                GUILayout.EndHorizontal();
+            }
+
+            return actionSet;
+        }
+
+        private void DrawRootController() {
+            AnimatorGroup animatorGroup = DrawGroupDropdown();
+            ActionSet actionSet = DrawActionSetDropdown(animatorGroup);
+
+            if (null != actionSet) {
+                foreach (CombinedAnimatorState state in actionSet.States) {
+                    GUILayout.Label(state.Layer.name);
+                    if (state.StateMachine != null) {
+                        DrawAnimatorStateMachine(state.StateMachine, false);
+                    } else if (state.AnimatorState != null) {
+                        DrawAnimatorState(state.AnimatorState, false);
+                    }
                 }
             }
         }
@@ -479,7 +609,12 @@ namespace UCCExtensions {
                     if (currentSelection is AnimatorStateTransition) {
                         DrawAnimatorTransition(currentSelection as AnimatorStateTransition, foldout: false);
                     } else if (currentSelection is AnimatorStateMachine) {
-                        DrawAnimatorStateMachine(currentSelection as AnimatorStateMachine);
+                        CombinedAnimatorState state = m_States.ContainsKey(currentSelection) ? m_States[currentSelection] : null;
+                        if (state.Parent == null) {
+                            DrawRootController();
+                        } else {
+                            DrawAnimatorStateMachine(currentSelection as AnimatorStateMachine);
+                        }
                     } else if (currentSelection is AnimatorState) {
                         DrawAnimatorState(currentSelection as AnimatorState);
                     } else {
