@@ -20,28 +20,6 @@ namespace Opsive.UltimateCharacterController.Editor.Managers {
     [Serializable]
     [ManagerMenuItem("Animation States", 9)]
     public class AnimationStateManager : Manager {
-        private static GUIStyle s_TreeRowHeaderGUIStyle;
-        public static GUIStyle TreeRowHeaderGUIStyle {
-            get {
-                if (s_TreeRowHeaderGUIStyle == null) {
-                    s_TreeRowHeaderGUIStyle = new GUIStyle("RL Header");
-                    // The header background image should stretch with the size of the rect.
-                    s_TreeRowHeaderGUIStyle.fixedHeight = 0;
-                    s_TreeRowHeaderGUIStyle.stretchHeight = true;
-                }
-                return s_TreeRowHeaderGUIStyle;
-            }
-        }
-        private static GUIStyle s_TreeRowBackgroundGUIStyle;
-        public static GUIStyle TreeRowBackgroundGUIStyle {
-            get {
-                if (s_TreeRowBackgroundGUIStyle == null) {
-                    s_TreeRowBackgroundGUIStyle = new GUIStyle("RL Background");
-                }
-                return s_TreeRowBackgroundGUIStyle;
-            }
-        }
-
         private class StateTab {
             public string name;
             public TreeViewState state;

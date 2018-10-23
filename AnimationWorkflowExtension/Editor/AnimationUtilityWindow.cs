@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Opsive.UltimateCharacterController.Editor.Inspectors.Utility;
@@ -227,24 +226,24 @@ namespace UCCExtensions {
             return modified;
         }
 
-        private void DrawState(State state, bool showHeader = true, string headerLabel = null) {
+        private void DrawState(CombinedAnimatorState state, bool showHeader = true, string headerLabel = null) {
             if (showHeader) GUILayout.Label(headerLabel ?? state.Name);
 
             foreach (AnimatorTransitionBase transition in state.AnyStateTransitions) {
                 GUILayout.BeginVertical(EditorStyles.helpBox);
-                DrawAnimatorTransition(transition, "Any State");
+                DrawAnimatorTransition(transition, "Any State", state);
                 GUILayout.EndVertical();
                 GUILayout.Space(8);
             }
             foreach (AnimatorTransitionBase transition in state.EntryTransitions) {
                 GUILayout.BeginVertical(EditorStyles.helpBox);
-                DrawAnimatorTransition(transition, "Entry");
+                DrawAnimatorTransition(transition, "Entry", state);
                 GUILayout.EndVertical();
                 GUILayout.Space(8);
             }
             foreach (AnimatorTransitionBase transition in state.Transitions) {
                 GUILayout.BeginVertical(EditorStyles.helpBox);
-                DrawAnimatorTransition(transition);
+                DrawAnimatorTransition(transition, sourceState: state);
                 GUILayout.EndVertical();
                 GUILayout.Space(8);
             }
@@ -306,7 +305,7 @@ namespace UCCExtensions {
             }
         }
 
-        private void DrawAnimatorTransition(AnimatorTransitionBase transition, string source = null) {
+        private void DrawAnimatorTransition(AnimatorTransitionBase transition, string source = null, CombinedAnimatorState sourceState = null) {
 
             // This is ugly. Apparently you can't modify the collection directly.
             // The only way I found that worked was to remove conditions and readd
@@ -315,10 +314,10 @@ namespace UCCExtensions {
             List<AnimatorCondition> conditions = new List<AnimatorCondition>();
             bool modified = false;
 
-            string label = GetTransitionLabel(transition, source: source);
+            string label = GetTransitionLabel(transition, sourceState, source);
             GUILayout.BeginHorizontal();
             {
-                foldouts[transition] = EditorGUILayout.Foldout(GetOrAdd(foldouts, transition, false), label);
+                foldouts[transition] = EditorGUILayout.Foldout(CollectionUtil.GetOrAdd(foldouts, transition, false), label);
                 if (foldouts[transition]) {
                     GUILayout.FlexibleSpace();
                     if (GUILayout.Button("+", InspectorStyles.NoPaddingButtonStyle, GUILayout.Width(16), GUILayout.Height(16))) {
@@ -355,9 +354,11 @@ namespace UCCExtensions {
             }
         }
 
-        private string GetTransitionLabel(AnimatorTransitionBase transition, AnimatorState state = null, string source = null) {
-            string label = (source ?? (null == state ? "Transition" : state.name)) + " -> ";
-            if (null != transition.destinationState) {
+        private string GetTransitionLabel(AnimatorTransitionBase transition, CombinedAnimatorState state = null, string source = null) {
+            string label = (source ?? "Self") + " -> ";
+            if(state.HasTransition(transition)) {
+                label += "Self";
+            } else if (null != transition.destinationState) {
                 label += transition.destinationState.name;
             } else if (null != transition.destinationStateMachine) {
                 label += transition.destinationStateMachine.name;
@@ -367,225 +368,14 @@ namespace UCCExtensions {
             return label;
         }
 
-        private static string[] UpdateNames(IEnumerable<string> keys, bool sorted = true) {
-            List<string> names = new List<string>();
-            foreach (string name in keys) {
-                names.Add(name);
-            }
-            if (sorted) names.Sort();
-            return names.ToArray();
-        }
-
-        private static U GetOrAdd<T, U>(IDictionary<T, U> dictionary, T name) {
-            U group;
-            if (!dictionary.TryGetValue(name, out group)) {
-                group = (U)typeof(U).GetConstructor(new Type[0]).Invoke(new object[0]);
-                dictionary[name] = group;
-            }
-            return group;
-        }
-
-        private static U GetOrAdd<T, U>(Dictionary<T, U> dictionary, T name, U defaultValue) {
-            U group;
-            if (!dictionary.TryGetValue(name, out group)) {
-                group = defaultValue;
-                dictionary[name] = group;
-            }
-            return group;
-        }
-
-        private class State {
-            private AnimatorState m_State;
-            private AnimatorStateMachine m_StateMachine;
-            private State m_ParentState;
-            private AnimatorControllerLayer m_Layer;
-            private ActionSet m_ActionSet;
-            private List<AnimatorTransitionBase> m_AnyTransitions = new List<AnimatorTransitionBase>();
-            private List<AnimatorTransitionBase> m_EntryTransitions = new List<AnimatorTransitionBase>();
-
-
-            public State() { }
-
-            public State(AnimatorState state, AnimatorControllerLayer layer) {
-                m_State = state;
-                m_Layer = layer;
-            }
-
-            public State(AnimatorStateMachine stateMachine, AnimatorControllerLayer layer) {
-                m_StateMachine = stateMachine;
-                m_Layer = layer;
-            }
-
-            public List<AnimatorTransitionBase> AnyStateTransitions {
-                get {
-                    return m_AnyTransitions;
-                }
-            }
-
-            public List<AnimatorTransitionBase> EntryTransitions {
-                get {
-                    return m_EntryTransitions;
-                }
-            }
-
-            public List<AnimatorTransitionBase> Transitions {
-                get {
-                    List<AnimatorTransitionBase> transitions = new List<AnimatorTransitionBase>();
-                    if (null != m_State) {
-                        transitions.AddRange(m_State.transitions);
-                    }
-                    if(null != m_StateMachine) {
-                        transitions.AddRange(m_StateMachine.GetStateMachineTransitions(m_StateMachine));
-                    }
-                    return transitions;
-                }
-            }
-
-            public State Parent {
-                get {
-                    return m_ParentState;
-                } set {
-                    m_ParentState = value;
-                    m_AnyTransitions.Clear();
-                    m_EntryTransitions.Clear();
-                    State parent = m_ParentState;
-                    while (null != parent) {
-                        foreach (AnimatorTransitionBase transition in parent.m_StateMachine.anyStateTransitions) {
-                            if (null != transition.destinationState && transition.destinationState == m_State) {
-                                m_AnyTransitions.Add(transition);
-                            }
-                            if (null != transition.destinationStateMachine && transition.destinationStateMachine == m_StateMachine) {
-                                m_AnyTransitions.Add(transition);
-                            }
-                        }
-                        foreach (AnimatorTransitionBase transition in parent.m_StateMachine.entryTransitions) {
-                            if (null != transition.destinationState && transition.destinationState == m_State) {
-                                m_EntryTransitions.Add(transition);
-                            }
-                            if (null != transition.destinationStateMachine && transition.destinationStateMachine == m_StateMachine) {
-                                m_EntryTransitions.Add(transition);
-                            }
-                        }
-                        parent = parent.Parent;
-                    }
-                }
-            }
-
-            public String Name {
-                get {
-                    if (null != m_State) return m_State.name;
-                    if (null != m_StateMachine) return m_StateMachine.name;
-                    return "";
-                }
-            }
-
-            public AnimatorControllerLayer Layer {
-                get { return m_Layer; }
-                set { m_Layer = value; }
-            }
-
-            public ActionSet ActionSet {
-                get { return m_ActionSet; }
-                set { m_ActionSet = value; }
-            }
-
-            public AnimatorState AnimatorState {
-                get {
-                    return m_State;
-                }
-            }
-
-            public AnimatorStateMachine StateMachine {
-                get {
-                    return m_StateMachine;
-                }
-            }
-
-            public ChildAnimatorState[] ChildStates {
-                get {
-                    return m_StateMachine != null ? m_StateMachine.states : new ChildAnimatorState[0];
-                }
-            }
-
-            public ChildAnimatorStateMachine[] ChildStateMachines {
-                get {
-                    return m_StateMachine != null ? m_StateMachine.stateMachines : new ChildAnimatorStateMachine[0];
-                }
-            }
-        }
-
-        private class ActionSet {
-            private string m_Name;
-            private List<State> m_States = new List<State>();
-            private SortedDictionary<string, AnimatorControllerLayer> m_Layers = new SortedDictionary<string, AnimatorControllerLayer>();
-            private string[] m_StateNames = new string[0];
-
-            // This will map to something like
-            // Bow (AnimatorGroup) -> Draw (Action) -> Full Body Layer (State)
-            private SortedDictionary<string, State> m_LayerToStates = new SortedDictionary<string, State>();
-
-            public string Name {
-                get { return m_Name; }
-                set { m_Name = value; }
-            }
-
-            public List<State> States {
-                get { return m_States; }
-            }
-
-            public SortedDictionary<string, AnimatorControllerLayer> Layers {
-                get {
-                    return m_Layers;
-                }
-            }
-        }
-
-        private class AnimatorGroup {
-            private string m_Name;
-            private SortedDictionary<string, AnimatorControllerLayer> m_Layers = new SortedDictionary<string, AnimatorControllerLayer>();
-            private SortedDictionary<string, ActionSet> m_Actions = new SortedDictionary<string, ActionSet>();
-            private string[] m_ActionNames = new string[0];
-
-            public string Name {
-                get { return m_Name; }
-                set { m_Name = value; }
-            }
-
-            public SortedDictionary<string, AnimatorControllerLayer> Layers {
-                get {
-                    return m_Layers;
-                }
-            }
-
-            public SortedDictionary<string, ActionSet> Actions {
-                get {
-                    return m_Actions;
-                }
-            }
-
-            public void AddLayer(AnimatorControllerLayer layer) {
-                m_Layers.Add(layer.name, layer);
-            }
-
-            public string[] ActionNames {
-                get {
-                    if(m_ActionNames.Length != m_Layers.Count) {
-                        m_ActionNames = UpdateNames(m_Actions.Keys);
-                    }
-                    return m_ActionNames;
-                }
-
-            }
-        }
-
-        private Dictionary<object, State> m_States = new Dictionary<object, State>();
+        private Dictionary<object, CombinedAnimatorState> m_States = new Dictionary<object, CombinedAnimatorState>();
         private SortedDictionary<string, AnimatorControllerLayer> m_Layers = new SortedDictionary<string, AnimatorControllerLayer>();
         private SortedDictionary<string, AnimatorGroup> m_AnimatorGroups = new SortedDictionary<string, AnimatorGroup>();
         private int selectedAnimatorGroup;
         private int selectedAction;
 
-        private State AddState(AnimatorStateMachine stateMachine, State parent, AnimatorControllerLayer layer, ActionSet actionSet, bool addChildren = true) {
-            State state = new State(stateMachine, layer);
+        private CombinedAnimatorState AddState(AnimatorStateMachine stateMachine, CombinedAnimatorState parent, AnimatorControllerLayer layer, ActionSet actionSet, bool addChildren = true) {
+            CombinedAnimatorState state = new CombinedAnimatorState(stateMachine, layer);
             state.Layer = layer;
             state.ActionSet = actionSet;
             state.Parent = parent;
@@ -601,8 +391,8 @@ namespace UCCExtensions {
             return state;
         }
 
-        private State AddState(AnimatorState animatorState, State parent, AnimatorControllerLayer layer, ActionSet actionSet) {
-            State state = new State(animatorState, layer);
+        private CombinedAnimatorState AddState(AnimatorState animatorState, CombinedAnimatorState parent, AnimatorControllerLayer layer, ActionSet actionSet) {
+            CombinedAnimatorState state = new CombinedAnimatorState(animatorState, layer);
             state.Layer = layer;
             state.ActionSet = actionSet;
             state.Parent = parent;
@@ -615,23 +405,23 @@ namespace UCCExtensions {
             if (m_AnimatorController != null) {
                 foreach (AnimatorControllerLayer layer in m_AnimatorController.layers) {
                     m_Layers[layer.name] = layer;
-                    State layerState = AddState(layer.stateMachine, null, layer, null, false);
+                    CombinedAnimatorState layerState = AddState(layer.stateMachine, null, layer, null, false);
                     foreach (ChildAnimatorStateMachine stateMachine in layerState.ChildStateMachines) {
-                        State groupState = AddState(stateMachine.stateMachine, layerState, layer, null, false);
-                        AnimatorGroup group = GetOrAdd(m_AnimatorGroups, stateMachine.stateMachine.name);
+                        CombinedAnimatorState groupState = AddState(stateMachine.stateMachine, layerState, layer, null, false);
+                        AnimatorGroup group = CollectionUtil.GetOrAdd(m_AnimatorGroups, stateMachine.stateMachine.name);
                         group.AddLayer(layer);
                         foreach (ChildAnimatorStateMachine actionMachine in stateMachine.stateMachine.stateMachines) {
-                            ActionSet actionSet = GetOrAdd(group.Actions, actionMachine.stateMachine.name);
+                            ActionSet actionSet = CollectionUtil.GetOrAdd(group.Actions, actionMachine.stateMachine.name);
                             actionSet.Name = actionMachine.stateMachine.name;
                             actionSet.Layers[layer.name] = layer;
-                            State state = AddState(actionMachine.stateMachine, groupState, layer, actionSet);
+                            CombinedAnimatorState state = AddState(actionMachine.stateMachine, groupState, layer, actionSet);
                             actionSet.States.Add(state);
                         }
                         foreach (ChildAnimatorState actionState in stateMachine.stateMachine.states) {
-                            ActionSet actionSet = GetOrAdd(group.Actions, actionState.state.name);
+                            ActionSet actionSet = CollectionUtil.GetOrAdd(group.Actions, actionState.state.name);
                             actionSet.Name = actionState.state.name;
                             actionSet.Layers[layer.name] = layer;
-                            State state = AddState(actionState.state, groupState, layer, actionSet);
+                            CombinedAnimatorState state = AddState(actionState.state, groupState, layer, actionSet);
                             actionSet.States.Add(state);
                             m_States[actionState.state] = state;
                         }
@@ -660,7 +450,7 @@ namespace UCCExtensions {
                 actionSet = animatorGroup.Actions[names[selectedAction]];
             } GUILayout.EndHorizontal();
 
-            foreach(State state in actionSet.States) {
+            foreach(CombinedAnimatorState state in actionSet.States) {
                 GUILayout.Label(state.Layer.name);
                 if(state.StateMachine != null) {
                     DrawAnimatorStateMachine(state.StateMachine, false);
